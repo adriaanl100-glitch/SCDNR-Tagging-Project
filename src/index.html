@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f766e" />
+  <title>SCDNR Tag Logging</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="config.example.js"></script>
+  <style>
+    #map { min-height: 240px; z-index: 0; }
+    .leaflet-container { font-family: inherit; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen pb-20">
+  <!-- Offline banner -->
+  <div id="offline-banner" class="hidden bg-amber-500 text-white text-center py-2 text-sm font-semibold">
+    Offline — catches saved locally
+  </div>
+
+  <!-- Header -->
+  <header class="bg-teal-800 text-white px-4 py-4 sticky top-0 z-20 shadow">
+    <div class="flex items-center justify-between max-w-lg mx-auto">
+      <h1 class="text-lg font-bold">SCDNR Tag Logging</h1>
+      <span class="unsent-badge hidden bg-amber-400 text-amber-900 text-sm font-bold px-3 py-1 rounded-full">0</span>
+    </div>
+  </header>
+
+  <main class="max-w-lg mx-auto px-4 py-4">
+    <!-- Catch Form Panel -->
+    <div id="panel-catch" data-tab-panel class="space-y-4">
+      <button type="button" id="gps-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold active:bg-teal-800 shadow">
+        Capture Current GPS Location
+      </button>
+      <p id="error-coordinates" class="field-error hidden text-red-600 text-sm"></p>
+
+      <div id="map" class="rounded-xl border border-slate-200 overflow-hidden shadow-sm"></div>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <input type="checkbox" id="bathy-toggle" class="w-5 h-5 rounded" />
+        Show NOAA bathymetry layer
+      </label>
+      <p class="text-xs text-slate-500">Tap a grid cell to set location, or use GPS above.</p>
+
+      <form id="catch-form" class="space-y-4" novalidate>
+        <!-- Tag Type -->
+        <fieldset class="bg-white rounded-xl shadow p-4">
+          <legend class="text-sm font-semibold text-slate-700 mb-2">Tag Type</legend>
+          <div class="flex gap-3">
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 px-4 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="tagType" id="tag-type-cr" value="CR" checked class="w-5 h-5" />
+              CR (T-Bar)
+            </label>
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 px-4 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="tagType" id="tag-type-k" value="K" class="w-5 h-5" />
+              K (Nylon Dart)
+            </label>
+          </div>
+          <p id="error-tagType" class="field-error hidden text-red-600 text-sm mt-1"></p>
+        </fieldset>
+
+        <div class="bg-white rounded-xl shadow p-4 space-y-3">
+          <div>
+            <label for="tag-number" class="text-sm font-semibold text-slate-700">Complete Tag #</label>
+            <input type="text" inputmode="numeric" id="tag-number" required class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-teal-500" placeholder="CR: 5 digits / K: 6 digits" />
+            <p id="error-tagNumber" class="field-error hidden text-red-600 text-sm mt-1"></p>
+          </div>
+          <div>
+            <label for="vial-number" class="text-sm font-semibold text-slate-700">Vial # (optional)</label>
+            <input type="text" id="vial-number" class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base" />
+          </div>
+          <div>
+            <label for="captured-at" class="text-sm font-semibold text-slate-700">Date & Time</label>
+            <input type="text" id="captured-at" readonly class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-200 bg-slate-50 text-base" />
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-4 space-y-3">
+          <div>
+            <label for="species" class="text-sm font-semibold text-slate-700">Species</label>
+            <select id="species" required class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base"></select>
+            <p id="error-species" class="field-error hidden text-red-600 text-sm mt-1"></p>
+            <p id="do-not-tag-warning" class="hidden text-red-600 font-bold text-sm mt-2">DO NOT TAG — Spotted Seatrout</p>
+          </div>
+          <div>
+            <label for="length-inches" class="text-sm font-semibold text-slate-700">Length (inches)</label>
+            <input type="number" step="0.1" id="length-inches" required class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base" />
+            <p id="error-lengthInches" class="field-error hidden text-red-600 text-sm mt-1"></p>
+          </div>
+        </div>
+
+        <fieldset class="bg-white rounded-xl shadow p-4">
+          <legend class="text-sm font-semibold text-slate-700 mb-2">Measurement Type</legend>
+          <div class="flex gap-3">
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="measurementType" id="measurement-tail" value="Tail" checked class="w-5 h-5" />
+              Tail
+            </label>
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="measurementType" id="measurement-fork" value="Fork" class="w-5 h-5" />
+              Fork
+            </label>
+          </div>
+          <p id="error-measurementType" class="field-error hidden text-red-600 text-sm mt-1"></p>
+        </fieldset>
+
+        <fieldset class="bg-white rounded-xl shadow p-4">
+          <legend class="text-sm font-semibold text-slate-700 mb-2">Measurement Accuracy</legend>
+          <div class="flex gap-3">
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="measurementAccuracy" value="Measured" checked class="w-5 h-5" />
+              Measured
+            </label>
+            <label class="flex-1 flex items-center justify-center gap-2 min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="measurementAccuracy" value="Estimated" class="w-5 h-5" />
+              Estimated
+            </label>
+          </div>
+          <p id="error-measurementAccuracy" class="field-error hidden text-red-600 text-sm mt-1"></p>
+        </fieldset>
+
+        <div class="bg-white rounded-xl shadow p-4 space-y-3">
+          <div>
+            <label for="location-name" class="text-sm font-semibold text-slate-700">Location Name</label>
+            <input type="text" id="location-name" required placeholder="e.g. Wando River" class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base" />
+            <p id="error-locationName" class="field-error hidden text-red-600 text-sm mt-1"></p>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="latitude" class="text-sm font-semibold text-slate-700">Latitude</label>
+              <input type="text" id="latitude" readonly class="w-full min-h-12 px-3 mt-1 rounded-lg border border-slate-200 bg-slate-50 text-sm" />
+              <p id="error-latitude" class="field-error hidden text-red-600 text-xs mt-1"></p>
+            </div>
+            <div>
+              <label for="longitude" class="text-sm font-semibold text-slate-700">Longitude</label>
+              <input type="text" id="longitude" readonly class="w-full min-h-12 px-3 mt-1 rounded-lg border border-slate-200 bg-slate-50 text-sm" />
+              <p id="error-longitude" class="field-error hidden text-red-600 text-xs mt-1"></p>
+            </div>
+          </div>
+          <input type="hidden" id="grid-cell-id" />
+        </div>
+
+        <fieldset class="bg-white rounded-xl shadow p-4">
+          <legend class="text-sm font-semibold text-slate-700 mb-2">Fish Condition</legend>
+          <div class="flex gap-2">
+            <label class="flex-1 flex items-center justify-center min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="condition" value="Good" checked class="sr-only" />
+              <span class="text-sm font-medium">Good</span>
+            </label>
+            <label class="flex-1 flex items-center justify-center min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="condition" value="Fair" class="sr-only" />
+              <span class="text-sm font-medium">Fair</span>
+            </label>
+            <label class="flex-1 flex items-center justify-center min-h-12 rounded-lg border cursor-pointer has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50">
+              <input type="radio" name="condition" value="Poor" class="sr-only" />
+              <span class="text-sm font-medium">Poor</span>
+            </label>
+          </div>
+          <p id="error-condition" class="field-error hidden text-red-600 text-sm mt-1"></p>
+        </fieldset>
+
+        <div class="bg-white rounded-xl shadow p-4">
+          <label class="text-sm font-semibold text-slate-700 block mb-2">Catch Photo</label>
+          <label class="flex flex-col items-center justify-center min-h-24 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-teal-500">
+            <input type="file" id="photo-input" accept="image/*" capture="environment" class="sr-only" />
+            <span class="text-slate-500 text-sm">Tap to capture or select photo</span>
+          </label>
+          <img id="photo-preview" class="hidden mt-3 w-full rounded-lg max-h-48 object-cover" alt="Preview" />
+          <p id="error-photoBase64" class="field-error hidden text-red-600 text-sm mt-1"></p>
+        </div>
+
+        <button type="submit" class="w-full min-h-14 rounded-xl bg-green-600 text-white text-lg font-semibold active:bg-green-700 shadow">
+          Save Catch
+        </button>
+      </form>
+    </div>
+
+    <!-- Sync Panel -->
+    <div id="panel-sync" data-tab-panel class="hidden space-y-6">
+      <div class="bg-white rounded-xl shadow p-6 text-center">
+        <p class="text-slate-600 mb-2">Catches Awaiting Sync</p>
+        <p id="sync-count" class="text-5xl font-bold text-teal-700">0</p>
+      </div>
+
+      <div id="sync-progress" class="hidden">
+        <div class="w-full bg-slate-200 rounded-full h-3">
+          <div id="sync-progress-bar" class="bg-teal-600 h-3 rounded-full transition-all" style="width: 0%"></div>
+        </div>
+      </div>
+      <p id="sync-status" class="text-center text-sm"></p>
+
+      <button type="button" id="sync-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold shadow">
+        Submit Sync to DNR
+      </button>
+      <button type="button" id="export-btn" class="w-full min-h-14 rounded-xl bg-slate-600 text-white text-lg font-semibold shadow">
+        Download Backup ZIP
+      </button>
+      <button type="button" id="clear-btn" class="w-full min-h-12 rounded-xl bg-red-600 text-white text-sm font-semibold opacity-80">
+        Clear Local Logs
+      </button>
+    </div>
+
+    <!-- Logbook Panel -->
+    <div id="panel-logbook" data-tab-panel class="hidden">
+      <div id="logbook-grid" class="grid grid-cols-2 gap-3"></div>
+    </div>
+  </main>
+
+  <!-- Tab bar -->
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-20">
+    <div class="max-w-lg mx-auto flex">
+      <button data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
+      <button data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Sync</button>
+      <button data-tab-btn="logbook" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Logbook</button>
+    </div>
+  </nav>
+
+  <!-- Save toast -->
+  <div id="save-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-30 font-semibold">
+    Catch saved!
+  </div>
+
+  <!-- Clear modal -->
+  <div id="clear-modal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
+      <div id="clear-step-1">
+        <h2 class="text-lg font-bold mb-2">Clear all local logs?</h2>
+        <p class="text-slate-600 text-sm mb-4">This removes unsynced catches from this device.</p>
+        <div class="flex gap-3">
+          <button id="clear-step1-no" class="flex-1 min-h-12 rounded-lg border">Cancel</button>
+          <button id="clear-step1-yes" class="flex-1 min-h-12 rounded-lg bg-amber-500 text-white font-semibold">Continue</button>
+        </div>
+      </div>
+      <div id="clear-step-2" class="hidden">
+        <h2 class="text-lg font-bold mb-2 text-red-600">Are you absolutely sure?</h2>
+        <p class="text-slate-600 text-sm mb-4">This cannot be undone.</p>
+        <div class="flex gap-3">
+          <button id="clear-step2-no" class="flex-1 min-h-12 rounded-lg border">Cancel</button>
+          <button id="clear-step2-yes" class="flex-1 min-h-12 rounded-lg bg-red-600 text-white font-semibold">Delete All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

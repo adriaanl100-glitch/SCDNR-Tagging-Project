@@ -1,0 +1,17 @@
+{
+  "name": "scdnr-tag-logging",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "serve": "npx serve src -p 3000"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  }
+}
