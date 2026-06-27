@@ -1,4 +1,4 @@
-const CACHE_NAME = 'scdnr-tag-logging-v14';
+const CACHE_NAME = 'scdnr-tag-logging-v15';
 const ASSETS = [
   './',
   './index.html',
