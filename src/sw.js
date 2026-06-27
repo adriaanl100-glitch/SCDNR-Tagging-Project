@@ -1,20 +1,25 @@
-const CACHE_NAME = 'scdnr-tag-logging-v15';
-const ASSETS = [
+const CACHE_NAME = 'scdnr-tag-logging-v16';
+
+/** App shell files — always prefer network so UI fixes reach users quickly. */
+const NETWORK_FIRST = [
   './',
   './index.html',
+  './js/app.js',
+  './js/map.js',
+  './js/sync.js',
+  './js/storage.js',
+  './js/validation.js',
+  './js/species.js',
+  './js/grid.js',
+  './js/image.js',
+  './js/export.js'
+];
+
+const CACHE_FIRST = [
   './manifest.json',
   './assets/scdnr-tagging-logo.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './js/app.js',
-  './js/species.js',
-  './js/validation.js',
-  './js/grid.js',
-  './js/image.js',
-  './js/storage.js',
-  './js/sync.js',
-  './js/export.js',
-  './js/map.js',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -24,7 +29,7 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS).catch(() => {}))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHE_FIRST).catch(() => {}))
   );
   self.skipWaiting();
 });
@@ -38,6 +43,40 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+function isNetworkFirst(url) {
+  try {
+    const { pathname } = new URL(url);
+    if (pathname.endsWith('/') || pathname.endsWith('/index.html')) return true;
+    return /\/js\/(app|map|sync|storage|validation|species|grid|image|export)\.js$/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    return caches.match(request);
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    cache.put(request, response.clone());
+  }
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = event.request.url;
@@ -46,15 +85,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || fetched;
-    })
+    isNetworkFirst(url) ? networkFirst(event.request) : cacheFirst(event.request)
   );
 });

@@ -16,7 +16,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="config.js?v=3"></script>
   <style>
-    #map { min-height: 240px; z-index: 0; }
+    #map {
+      min-height: 240px;
+      height: 240px;
+      position: relative;
+      z-index: 0;
+      isolation: isolate;
+      overflow: hidden;
+    }
     .leaflet-container { font-family: inherit; }
   </style>
 </head>
@@ -224,7 +231,7 @@
   </main>
 
   <!-- Tab bar -->
-  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-20">
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
     <div class="max-w-lg mx-auto flex">
       <button data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
       <button data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>
