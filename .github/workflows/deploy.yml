@@ -27,7 +27,7 @@ jobs:
         run: |
           cat << EOF > src/config.js
           window.SCDNR_CONFIG = {
-            WEBHOOK_URL: '${{ secrets.WEBHOOK_URL }}',
+            WEBHOOK_URL: 'https://script.google.com/macros/s/AKfycbwpDzv2kzEI70hvSsJPp6GTPXszUXNprPJdFm0_Zzhx4qHwD6-0Uc390W_6OBUvVQ1W/exec',
             WEBHOOK_TOKEN: '${{ secrets.WEBHOOK_TOKEN }}'
           };
           EOF
