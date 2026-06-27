@@ -1,4 +1,4 @@
-const CACHE_NAME = 'scdnr-tag-logging-v17';
+const CACHE_NAME = 'scdnr-tag-logging-v18';
 
 /** App shell files — always prefer network so UI fixes reach users quickly. */
 const NETWORK_FIRST = [

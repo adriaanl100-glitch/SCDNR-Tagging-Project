@@ -172,14 +172,23 @@ function collectFormData() {
 
 function updatePhotoUI() {
   const hasPhoto = !!state.photoBase64;
-  $('#photo-upload-area')?.classList.toggle('hidden', hasPhoto);
+  const upload = $('#photo-upload-area');
   const preview = $('#photo-preview');
-  if (preview) {
-    preview.classList.toggle('hidden', !hasPhoto);
-    preview.src = hasPhoto ? state.photoBase64 : '';
-  }
-  $('#photo-actions')?.classList.toggle('hidden', !hasPhoto);
+  const actions = $('#photo-actions');
+
+  upload?.classList.toggle('hidden', hasPhoto);
+  actions?.classList.toggle('hidden', !hasPhoto);
   $('#photo-save-status')?.classList.add('hidden');
+
+  if (preview) {
+    if (hasPhoto) {
+      preview.src = state.photoBase64;
+      preview.classList.remove('hidden');
+    } else {
+      preview.removeAttribute('src');
+      preview.classList.add('hidden');
+    }
+  }
 }
 
 function setPhotoSaveStatus(message, isError = false) {
@@ -280,12 +289,12 @@ async function handleSaveCatch(e) {
   setTimeout(() => $('#save-toast').classList.add('hidden'), 2500);
 
   resetForm();
+  document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function handlePhotoChange(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-  if (state.photoBase64) return;
   try {
     const { dataUrl } = await compressImage(file);
     state.photoBase64 = dataUrl;
@@ -294,7 +303,7 @@ async function handlePhotoChange(e) {
     showFieldErrors({});
     await persistPhotoToDevice(dataUrl, state.photoFilename);
   } catch (err) {
-    showFieldErrors({ photoBase64: err.message });
+    showFieldErrors({ photoBase64: err.message || 'Could not process photo' });
   } finally {
     e.target.value = '';
   }
@@ -435,6 +444,7 @@ function renderLogbook() {
 async function init() {
   // Remove legacy modal overlay from older cached builds (blocked bottom tabs).
   document.getElementById('clear-modal')?.remove();
+  document.querySelector('.modal-backdrop')?.remove();
 
   populateSpeciesDropdown();
   setDefaultCaptureDate();
@@ -464,7 +474,7 @@ async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
     caches?.keys?.().then((keys) =>
-      keys.filter((k) => k !== 'scdnr-tag-logging-v17').forEach((k) => caches.delete(k))
+      keys.filter((k) => k !== 'scdnr-tag-logging-v18').forEach((k) => caches.delete(k))
     );
   }
 }

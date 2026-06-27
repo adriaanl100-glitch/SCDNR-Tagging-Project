@@ -16,6 +16,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="config.js?v=3"></script>
   <style>
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+    }
     #map {
       min-height: 240px;
       height: 240px;
@@ -35,7 +44,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-50 min-h-[100dvh] flex flex-col">
+<body class="bg-slate-50 flex flex-col">
   <!-- Offline banner -->
   <div id="offline-banner" class="hidden bg-amber-500 text-white text-center py-2 text-sm font-semibold">
     Offline — catches saved locally
@@ -55,7 +64,7 @@
     </div>
   </header>
 
-  <main class="flex-1 overflow-y-auto w-full max-w-lg mx-auto px-4 py-4 min-h-0">
+  <main class="flex-1 overflow-y-auto overscroll-y-contain w-full max-w-lg mx-auto px-4 py-4 min-h-0 pb-24">
     <!-- Catch Form Panel -->
     <div id="panel-catch" data-tab-panel class="space-y-4">
       <button type="button" id="gps-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold active:bg-teal-800 shadow">
@@ -238,8 +247,8 @@
     </div>
   </main>
 
-  <!-- Tab bar (in document flow — avoids iOS fixed-footer tap bugs) -->
-  <nav id="app-nav" class="shrink-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
+  <!-- Tab bar — fixed so it is always visible above scrollable form -->
+  <nav id="app-nav" class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-[1000] pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
     <div class="max-w-lg mx-auto flex">
       <button type="button" data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
       <button type="button" data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>

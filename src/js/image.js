@@ -1,6 +1,5 @@
 const MAX_WIDTH = 800;
 const JPEG_QUALITY = 0.75;
-const LOGO_PATH = '../assets/scdnr-tagging-logo.png';
 
 let logoImagePromise = null;
 
@@ -20,13 +19,18 @@ function loadImageFromFile(file) {
   });
 }
 
+function resolveLogoUrl() {
+  const base = document.querySelector('link[rel="manifest"]')?.href || window.location.href;
+  return new URL('assets/scdnr-tagging-logo.png', base).href;
+}
+
 function loadLogoImage() {
   if (!logoImagePromise) {
     logoImagePromise = new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('Failed to load SCDNR logo'));
-      img.src = new URL(LOGO_PATH, import.meta.url).href;
+      img.src = resolveLogoUrl();
     });
   }
   return logoImagePromise;
@@ -62,12 +66,15 @@ export async function compressImage(file, options = {}) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
 
   if (watermark) {
-    const logo = await loadLogoImage();
-    drawWithLogo(ctx, img, logo, width, height);
-  } else {
-    ctx.drawImage(img, 0, 0, width, height);
+    try {
+      const logo = await loadLogoImage();
+      drawWithLogo(ctx, img, logo, width, height);
+    } catch {
+      /* still return compressed photo without logo stamp */
+    }
   }
 
   const dataUrl = canvas.toDataURL('image/jpeg', quality);
@@ -77,4 +84,4 @@ export async function compressImage(file, options = {}) {
   return { dataUrl, width, height, byteSize };
 }
 
-export { MAX_WIDTH, JPEG_QUALITY, LOGO_PATH };
+export { MAX_WIDTH, JPEG_QUALITY };
