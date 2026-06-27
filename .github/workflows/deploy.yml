@@ -23,6 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v4
+      - name: Inject Production Configuration
+        run: |
+          cat << EOF > src/config.js
+          window.SCDNR_CONFIG = {
+            WEBHOOK_URL: '${{ secrets.WEBHOOK_URL }}',
+            WEBHOOK_TOKEN: '${{ secrets.WEBHOOK_TOKEN }}'
+          };
+          EOF
       - uses: actions/upload-pages-artifact@v3
         with:
           path: src
