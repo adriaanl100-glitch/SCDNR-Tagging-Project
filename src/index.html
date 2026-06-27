@@ -16,15 +16,63 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="config.js?v=3"></script>
   <style>
+    .scdnr-hidden { display: none !important; }
+
     html, body {
       height: 100%;
+      height: 100vh;
       height: 100dvh;
+      max-height: 100vh;
+      max-height: 100dvh;
       overflow: hidden;
+      -webkit-text-size-adjust: 100%;
     }
     body {
       display: flex;
       flex-direction: column;
+      margin: 0;
     }
+
+    #app-header {
+      position: sticky;
+      top: 0;
+      z-index: 99999;
+      flex-shrink: 0;
+    }
+
+    .app-tabs {
+      display: flex;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      background: #115e59;
+    }
+    .app-tab {
+      flex: 1;
+      min-height: 52px;
+      padding: 12px 6px;
+      font-size: 14px;
+      font-weight: 600;
+      border: 0;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.75);
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+      touch-action: manipulation;
+    }
+    .app-tab.is-active {
+      color: #fff;
+      border-bottom-color: #fbbf24;
+    }
+
+    #app-main {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      min-height: 0;
+    }
+
     #map {
       min-height: 240px;
       height: 240px;
@@ -34,13 +82,28 @@
       overflow: hidden;
     }
     .leaflet-container { font-family: inherit; touch-action: pan-x pan-y; }
-    #app-nav {
-      touch-action: manipulation;
-      pointer-events: auto;
+
+    #photo-preview {
+      display: none;
+      width: 100%;
+      max-height: 12rem;
+      object-fit: cover;
+      border-radius: 0.5rem;
+      margin-top: 0.75rem;
+      background: #f1f5f9;
     }
-    #app-nav button {
-      min-height: 48px;
-      touch-action: manipulation;
+    #photo-preview.is-visible {
+      display: block !important;
+    }
+
+    #save-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 1.5rem;
+      transform: translateX(-50%);
+      z-index: 100000;
+      max-width: calc(100vw - 2rem);
+      text-align: center;
     }
   </style>
 </head>
@@ -50,21 +113,28 @@
     Offline — catches saved locally
   </div>
 
-  <!-- Header -->
-  <header class="bg-teal-800 text-white px-4 py-3 sticky top-0 z-20 shadow">
-    <div class="flex items-center justify-between max-w-lg mx-auto gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        <img src="assets/scdnr-tagging-logo.png" alt="SCDNR Saltwater Tagging Program" class="h-12 w-12 rounded-full object-cover shrink-0 ring-2 ring-teal-600" />
-        <div class="min-w-0">
-          <h1 class="text-base font-bold leading-tight truncate">SCDNR Tag Logging</h1>
-          <p class="text-xs text-teal-200 truncate">Saltwater Tagging Program</p>
+  <!-- Header + top tabs (always visible, plain CSS — no fixed footer) -->
+  <header id="app-header" class="bg-teal-800 text-white shadow">
+    <div class="px-4 py-3">
+      <div class="flex items-center justify-between max-w-lg mx-auto gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <img src="assets/scdnr-tagging-logo.png" alt="SCDNR Saltwater Tagging Program" class="h-12 w-12 rounded-full object-cover shrink-0 ring-2 ring-teal-600" />
+          <div class="min-w-0">
+            <h1 class="text-base font-bold leading-tight truncate">SCDNR Tag Logging</h1>
+            <p class="text-xs text-teal-200 truncate">Saltwater Tagging Program</p>
+          </div>
         </div>
+        <span class="unsent-badge scdnr-hidden bg-amber-400 text-amber-900 text-sm font-bold px-3 py-1 rounded-full shrink-0">0</span>
       </div>
-      <span class="unsent-badge hidden bg-amber-400 text-amber-900 text-sm font-bold px-3 py-1 rounded-full shrink-0">0</span>
     </div>
+    <nav id="app-nav" class="app-tabs max-w-lg mx-auto w-full" aria-label="Main navigation">
+      <button type="button" data-tab-btn="catch" class="app-tab is-active">Log Catch</button>
+      <button type="button" data-tab-btn="sync" class="app-tab">Submit</button>
+      <button type="button" data-tab-btn="logbook" class="app-tab">Logbook</button>
+    </nav>
   </header>
 
-  <main class="flex-1 overflow-y-auto overscroll-y-contain w-full max-w-lg mx-auto px-4 py-4 min-h-0 pb-24">
+  <main id="app-main" class="w-full max-w-lg mx-auto px-4 py-4">
     <!-- Catch Form Panel -->
     <div id="panel-catch" data-tab-panel class="space-y-4">
       <button type="button" id="gps-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold active:bg-teal-800 shadow">
@@ -206,8 +276,9 @@
             <span class="text-slate-600 text-sm font-medium text-center">Tap to capture or select photo</span>
             <span class="text-slate-400 text-xs mt-1 text-center">Saved to this device automatically</span>
           </label>
-          <img id="photo-preview" class="hidden mt-3 w-full rounded-lg max-h-48 object-cover" alt="Catch photo preview" />
-          <div id="photo-actions" class="hidden mt-2 flex flex-wrap gap-3">
+          <img id="photo-preview" alt="Catch photo preview" />
+          <p id="photo-processing" class="scdnr-hidden text-xs text-slate-500 mt-2">Processing photo…</p>
+          <div id="photo-actions" class="scdnr-hidden mt-2 flex flex-wrap gap-3" style="display:none">
             <button type="button" id="photo-save-btn" class="text-sm text-teal-700 font-semibold underline">Save photo to device</button>
             <button type="button" id="photo-remove-btn" class="text-sm text-slate-600 underline">Remove photo</button>
           </div>
@@ -222,7 +293,7 @@
     </div>
 
     <!-- Submit Panel -->
-    <div id="panel-sync" data-tab-panel class="hidden space-y-6">
+    <div id="panel-sync" data-tab-panel class="scdnr-hidden space-y-6">
       <div class="bg-white rounded-xl shadow p-6 text-center">
         <p class="text-slate-600 mb-2">Catches Ready to Submit</p>
         <p id="sync-count" class="text-5xl font-bold text-teal-700">0</p>
@@ -242,25 +313,15 @@
     </div>
 
     <!-- Logbook Panel -->
-    <div id="panel-logbook" data-tab-panel class="hidden">
+    <div id="panel-logbook" data-tab-panel class="scdnr-hidden">
       <div id="logbook-grid" class="grid grid-cols-2 gap-3"></div>
     </div>
   </main>
 
-  <!-- Tab bar — fixed so it is always visible above scrollable form -->
-  <nav id="app-nav" class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-[1000] pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-    <div class="max-w-lg mx-auto flex">
-      <button type="button" data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
-      <button type="button" data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>
-      <button type="button" data-tab-btn="logbook" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Logbook</button>
-    </div>
-  </nav>
-
-  <!-- Save toast -->
-  <div id="save-toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-[60] font-semibold">
+  <div id="save-toast" class="scdnr-hidden bg-green-600 text-white px-6 py-3 rounded-full shadow-lg font-semibold">
     Catch saved!
   </div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=19"></script>
 </body>
 </html>

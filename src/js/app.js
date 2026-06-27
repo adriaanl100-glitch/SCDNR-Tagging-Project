@@ -9,6 +9,7 @@ import { initMap, captureGPS, toggleBathymetry, setMapLocation } from './map.js'
 const state = {
   photoBase64: null,
   photoFilename: null,
+  photoPreviewUrl: null,
   latitude: null,
   longitude: null,
   gridCellId: null,
@@ -22,18 +23,19 @@ function getWebhookUrl() {
   return getSyncConfig().webhookUrl;
 }
 
+function setPanelVisible(el, visible) {
+  if (!el) return;
+  el.classList.toggle('scdnr-hidden', !visible);
+}
+
 function showTab(tabId) {
-  $$('[data-tab-panel]').forEach((p) => p.classList.add('hidden'));
-  $$('[data-tab-btn]').forEach((b) => {
-    b.classList.remove('border-teal-600', 'text-teal-700');
-    b.classList.add('border-transparent', 'text-slate-500');
+  $$('[data-tab-panel]').forEach((p) => {
+    setPanelVisible(p, p.id === `panel-${tabId}`);
   });
-  $(`#panel-${tabId}`)?.classList.remove('hidden');
-  const btn = $(`[data-tab-btn="${tabId}"]`);
-  if (btn) {
-    btn.classList.add('border-teal-600', 'text-teal-700');
-    btn.classList.remove('border-transparent', 'text-slate-500');
-  }
+  $$('[data-tab-btn]').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.tabBtn === tabId);
+  });
+  $('#app-main')?.scrollTo({ top: 0, behavior: 'smooth' });
   if (tabId === 'logbook') renderLogbook();
 }
 
@@ -48,7 +50,7 @@ function updateUnsentBadge() {
   const badges = $$('.unsent-badge');
   badges.forEach((el) => {
     el.textContent = pending;
-    el.classList.toggle('hidden', pending === 0);
+    el.classList.toggle('scdnr-hidden', pending === 0);
   });
   const syncCount = $('#sync-count');
   if (syncCount) syncCount.textContent = pending;
@@ -170,23 +172,32 @@ function collectFormData() {
   };
 }
 
+function revokePhotoPreviewUrl() {
+  if (state.photoPreviewUrl) {
+    URL.revokeObjectURL(state.photoPreviewUrl);
+    state.photoPreviewUrl = null;
+  }
+}
+
 function updatePhotoUI() {
-  const hasPhoto = !!state.photoBase64;
+  const hasPhoto = !!state.photoBase64 || !!state.photoPreviewUrl;
   const upload = $('#photo-upload-area');
   const preview = $('#photo-preview');
   const actions = $('#photo-actions');
 
-  upload?.classList.toggle('hidden', hasPhoto);
-  actions?.classList.toggle('hidden', !hasPhoto);
-  $('#photo-save-status')?.classList.add('hidden');
+  if (upload) upload.style.display = hasPhoto ? 'none' : '';
+  if (actions) actions.style.display = state.photoBase64 ? 'flex' : 'none';
 
   if (preview) {
-    if (hasPhoto) {
-      preview.src = state.photoBase64;
-      preview.classList.remove('hidden');
+    const src = state.photoBase64 || state.photoPreviewUrl;
+    if (src) {
+      preview.src = src;
+      preview.classList.add('is-visible');
+      preview.style.display = 'block';
     } else {
       preview.removeAttribute('src');
-      preview.classList.add('hidden');
+      preview.classList.remove('is-visible');
+      preview.style.display = 'none';
     }
   }
 }
@@ -216,10 +227,12 @@ async function persistPhotoToDevice(dataUrl, filename, { interactive = false } =
 }
 
 function clearPhoto() {
+  revokePhotoPreviewUrl();
   state.photoBase64 = null;
   state.photoFilename = null;
   const input = $('#photo-input');
   if (input) input.value = '';
+  $('#photo-processing')?.classList.add('scdnr-hidden');
   updatePhotoUI();
   showFieldErrors({});
 }
@@ -246,6 +259,7 @@ async function handleSavePhotoToDevice() {
 
 function resetForm() {
   $('#catch-form').reset();
+  revokePhotoPreviewUrl();
   state.photoBase64 = null;
   state.photoFilename = null;
   state.latitude = null;
@@ -256,6 +270,7 @@ function resetForm() {
   $('#grid-cell-id').value = '';
   const input = $('#photo-input');
   if (input) input.value = '';
+  $('#photo-processing')?.classList.add('scdnr-hidden');
   updatePhotoUI();
   setDefaultCaptureDate();
   showFieldErrors({});
@@ -282,29 +297,49 @@ async function handleSaveCatch(e) {
   updateUnsentBadge();
 
   if (record.photoBase64) {
-    await persistPhotoToDevice(record.photoBase64, buildCatchPhotoFilename(record), { interactive: true });
+    persistPhotoToDevice(record.photoBase64, buildCatchPhotoFilename(record), { interactive: true })
+      .catch(() => {});
   }
 
-  $('#save-toast').classList.remove('hidden');
-  setTimeout(() => $('#save-toast').classList.add('hidden'), 2500);
+  const pending = countPending(state.records);
+  const toast = $('#save-toast');
+  if (toast) {
+    toast.textContent = pending === 1
+      ? 'Catch saved! 1 catch ready to submit.'
+      : `Catch saved! ${pending} catches ready to submit.`;
+    toast.classList.remove('scdnr-hidden');
+    setTimeout(() => toast.classList.add('scdnr-hidden'), 3500);
+  }
 
   resetForm();
-  document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  showTab('sync');
 }
 
 async function handlePhotoChange(e) {
   const file = e.target.files?.[0];
   if (!file) return;
+
+  revokePhotoPreviewUrl();
+  state.photoBase64 = null;
+  state.photoFilename = null;
+  state.photoPreviewUrl = URL.createObjectURL(file);
+  updatePhotoUI();
+  showFieldErrors({});
+  $('#photo-processing')?.classList.remove('scdnr-hidden');
+
   try {
     const { dataUrl } = await compressImage(file);
+    revokePhotoPreviewUrl();
     state.photoBase64 = dataUrl;
     state.photoFilename = `scdnr-catch-${Date.now()}.jpg`;
     updatePhotoUI();
-    showFieldErrors({});
-    await persistPhotoToDevice(dataUrl, state.photoFilename);
+    persistPhotoToDevice(dataUrl, state.photoFilename).catch(() => {});
   } catch (err) {
+    revokePhotoPreviewUrl();
+    updatePhotoUI();
     showFieldErrors({ photoBase64: err.message || 'Could not process photo' });
   } finally {
+    $('#photo-processing')?.classList.add('scdnr-hidden');
     e.target.value = '';
   }
 }
@@ -467,15 +502,24 @@ async function init() {
   $('#bathy-toggle').addEventListener('change', (e) => toggleBathymetry(e.target.checked));
   $('#sync-btn').addEventListener('click', handleSync);
 
-  $$('[data-tab-btn]').forEach((btn) => {
-    btn.addEventListener('click', () => showTab(btn.dataset.tabBtn));
-  });
+  const nav = $('#app-nav');
+  if (nav) {
+    nav.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-tab-btn]');
+      if (!btn) return;
+      event.preventDefault();
+      showTab(btn.dataset.tabBtn);
+    });
+  }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.update());
+    }).catch(() => {});
     caches?.keys?.().then((keys) =>
-      keys.filter((k) => k !== 'scdnr-tag-logging-v18').forEach((k) => caches.delete(k))
+      keys.filter((k) => k !== 'scdnr-tag-logging-v19').forEach((k) => caches.delete(k))
     );
+    navigator.serviceWorker.register('./sw.js?v=19').catch(() => {});
   }
 }
 
