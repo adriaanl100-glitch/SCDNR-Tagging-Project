@@ -1,6 +1,8 @@
 const MAX_WIDTH = 800;
 const JPEG_QUALITY = 0.75;
-const WATERMARK_TEXT = 'SCDNR Saltwater Tagging Program';
+const LOGO_PATH = '../assets/scdnr-tagging-logo.png';
+
+let logoImagePromise = null;
 
 function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
@@ -18,19 +20,28 @@ function loadImageFromFile(file) {
   });
 }
 
-function drawWithWatermark(ctx, img, width, height) {
-  ctx.drawImage(img, 0, 0, width, height);
-  const fontSize = Math.max(14, Math.floor(width * 0.04));
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-  ctx.lineWidth = 2;
-  const padding = 8;
-  const textWidth = ctx.measureText(WATERMARK_TEXT).width;
-  const x = width - textWidth - padding;
-  const y = height - padding;
-  ctx.strokeText(WATERMARK_TEXT, x, y);
-  ctx.fillText(WATERMARK_TEXT, x, y);
+function loadLogoImage() {
+  if (!logoImagePromise) {
+    logoImagePromise = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to load SCDNR logo'));
+      img.src = new URL(LOGO_PATH, import.meta.url).href;
+    });
+  }
+  return logoImagePromise;
+}
+
+function drawWithLogo(ctx, photo, logo, width, height) {
+  ctx.drawImage(photo, 0, 0, width, height);
+
+  const logoMaxWidth = Math.min(width * 0.28, 180);
+  const logoScale = logoMaxWidth / logo.width;
+  const logoW = logo.width * logoScale;
+  const logoH = logo.height * logoScale;
+  const padding = Math.max(8, width * 0.02);
+
+  ctx.drawImage(logo, width - logoW - padding, height - logoH - padding, logoW, logoH);
 }
 
 export function computeScaledDimensions(imgWidth, imgHeight, maxWidth = MAX_WIDTH) {
@@ -53,7 +64,8 @@ export async function compressImage(file, options = {}) {
   const ctx = canvas.getContext('2d');
 
   if (watermark) {
-    drawWithWatermark(ctx, img, width, height);
+    const logo = await loadLogoImage();
+    drawWithLogo(ctx, img, logo, width, height);
   } else {
     ctx.drawImage(img, 0, 0, width, height);
   }
@@ -65,4 +77,4 @@ export async function compressImage(file, options = {}) {
   return { dataUrl, width, height, byteSize };
 }
 
-export { MAX_WIDTH, JPEG_QUALITY, WATERMARK_TEXT };
+export { MAX_WIDTH, JPEG_QUALITY, LOGO_PATH };

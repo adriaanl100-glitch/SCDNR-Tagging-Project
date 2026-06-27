@@ -1,13 +1,14 @@
 import { SPECIES_LIST, getAllowedTagTypes, getDefaultMeasurement, isDoNotTagSpecies } from './species.js';
 import { validateCatchRecord } from './validation.js';
 import { compressImage } from './image.js';
-import { getAllCatches, saveCatch, clearAllCatches, countPending, generateId } from './storage.js';
-import { syncAllRecords } from './sync.js';
-import { exportBackupZip, downloadBlob } from './export.js';
+import { getAllCatches, saveCatch, countPending, generateId } from './storage.js';
+import { syncAllRecords, getSyncConfig, isWebhookConfigured } from './sync.js';
+import { savePhotoToDevice, buildCatchPhotoFilename } from './export.js';
 import { initMap, captureGPS, toggleBathymetry, setMapLocation } from './map.js';
 
 const state = {
   photoBase64: null,
+  photoFilename: null,
   latitude: null,
   longitude: null,
   gridCellId: null,
@@ -18,7 +19,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 function getWebhookUrl() {
-  return window.SCDNR_CONFIG?.WEBHOOK_URL || '';
+  return getSyncConfig().webhookUrl;
 }
 
 function showTab(tabId) {
@@ -57,8 +58,8 @@ function setCoordinates(lat, lon, gridCellId) {
   state.latitude = lat;
   state.longitude = lon;
   state.gridCellId = gridCellId || null;
-  $('#latitude').value = lat?.toFixed(6) ?? '';
-  $('#longitude').value = lon?.toFixed(6) ?? '';
+  $('#latitude').value = lat?.toFixed(4) ?? '';
+  $('#longitude').value = lon?.toFixed(4) ?? '';
   $('#grid-cell-id').value = gridCellId ?? '';
   setMapLocation(lat, lon);
 }
@@ -104,6 +105,33 @@ function updateTagTypeAvailability() {
   }
 }
 
+function todayDateInputValue() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function dateInputToIso(dateValue) {
+  if (!dateValue) return '';
+  return dateValue;
+}
+
+function setDefaultCaptureDate() {
+  const input = $('#captured-at');
+  if (input) input.value = todayDateInputValue();
+}
+
+function formatCaptureDate(value) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, y, m, d] = match;
+    return `${m}/${d}/${y}`;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+}
+
 function showFieldErrors(errors) {
   $$('.field-error').forEach((el) => {
     el.textContent = '';
@@ -128,7 +156,7 @@ function collectFormData() {
     tagType,
     tagNumber: $('#tag-number').value.trim(),
     vialNumber: $('#vial-number').value.trim(),
-    capturedAt: new Date().toISOString(),
+    capturedAt: dateInputToIso($('#captured-at').value),
     species: $('#species').value,
     lengthInches: parseFloat($('#length-inches').value),
     measurementType,
@@ -142,18 +170,85 @@ function collectFormData() {
   };
 }
 
+function updatePhotoUI() {
+  const hasPhoto = !!state.photoBase64;
+  $('#photo-upload-area')?.classList.toggle('hidden', hasPhoto);
+  const preview = $('#photo-preview');
+  if (preview) {
+    preview.classList.toggle('hidden', !hasPhoto);
+    preview.src = hasPhoto ? state.photoBase64 : '';
+  }
+  $('#photo-actions')?.classList.toggle('hidden', !hasPhoto);
+  $('#photo-save-status')?.classList.add('hidden');
+}
+
+function setPhotoSaveStatus(message, isError = false) {
+  const el = $('#photo-save-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = isError
+    ? 'text-xs text-red-600 mt-1'
+    : 'text-xs text-green-700 mt-1';
+  el.classList.remove('hidden');
+}
+
+async function persistPhotoToDevice(dataUrl, filename, { interactive = false } = {}) {
+  const result = await savePhotoToDevice(dataUrl, filename, { interactive });
+  if (result.saved) {
+    setPhotoSaveStatus(
+      result.method === 'share'
+        ? 'Photo saved to your device.'
+        : 'Photo downloaded to this device.'
+    );
+  } else if (result.method === 'manual') {
+    setPhotoSaveStatus('Tap "Save photo to device" to store this photo on your phone.');
+  }
+  return result;
+}
+
+function clearPhoto() {
+  state.photoBase64 = null;
+  state.photoFilename = null;
+  const input = $('#photo-input');
+  if (input) input.value = '';
+  updatePhotoUI();
+  showFieldErrors({});
+}
+
+async function handleSavePhotoToDevice() {
+  if (!state.photoBase64) return;
+  const filename = state.photoFilename || `scdnr-catch-${Date.now()}.jpg`;
+  try {
+    const result = await savePhotoToDevice(state.photoBase64, filename, { interactive: true });
+    if (result.method === 'cancelled') return;
+    if (result.saved) {
+      setPhotoSaveStatus(
+        result.method === 'share'
+          ? 'Photo saved to your device.'
+          : 'Photo downloaded to this device.'
+      );
+    } else if (result.method === 'manual') {
+      setPhotoSaveStatus('Tap "Save photo to device" to store this photo on your phone.');
+    }
+  } catch (err) {
+    setPhotoSaveStatus(err.message || 'Could not save photo', true);
+  }
+}
+
 function resetForm() {
   $('#catch-form').reset();
   state.photoBase64 = null;
+  state.photoFilename = null;
   state.latitude = null;
   state.longitude = null;
   state.gridCellId = null;
   $('#latitude').value = '';
   $('#longitude').value = '';
   $('#grid-cell-id').value = '';
-  $('#photo-preview').classList.add('hidden');
-  $('#photo-preview').src = '';
-  $('#captured-at').value = new Date().toLocaleString();
+  const input = $('#photo-input');
+  if (input) input.value = '';
+  updatePhotoUI();
+  setDefaultCaptureDate();
   showFieldErrors({});
 }
 
@@ -177,6 +272,10 @@ async function handleSaveCatch(e) {
   state.records = await getAllCatches();
   updateUnsentBadge();
 
+  if (record.photoBase64) {
+    await persistPhotoToDevice(record.photoBase64, buildCatchPhotoFilename(record), { interactive: true });
+  }
+
   $('#save-toast').classList.remove('hidden');
   setTimeout(() => $('#save-toast').classList.add('hidden'), 2500);
 
@@ -186,14 +285,18 @@ async function handleSaveCatch(e) {
 async function handlePhotoChange(e) {
   const file = e.target.files?.[0];
   if (!file) return;
+  if (state.photoBase64) return;
   try {
     const { dataUrl } = await compressImage(file);
     state.photoBase64 = dataUrl;
-    const preview = $('#photo-preview');
-    preview.src = dataUrl;
-    preview.classList.remove('hidden');
+    state.photoFilename = `scdnr-catch-${Date.now()}.jpg`;
+    updatePhotoUI();
+    showFieldErrors({});
+    await persistPhotoToDevice(dataUrl, state.photoFilename);
   } catch (err) {
     showFieldErrors({ photoBase64: err.message });
+  } finally {
+    e.target.value = '';
   }
 }
 
@@ -219,13 +322,20 @@ async function handleGPS() {
 
 async function handleSync() {
   const url = getWebhookUrl();
+  const status = $('#sync-status');
+
+  if (!isWebhookConfigured(url)) {
+    status.textContent = 'Submission is temporarily unavailable. Please try again later.';
+    status.className = 'text-red-600 font-semibold text-sm';
+    return;
+  }
+
   const progress = $('#sync-progress');
   const bar = $('#sync-progress-bar');
-  const status = $('#sync-status');
 
   progress.classList.remove('hidden');
   bar.style.width = '0%';
-  status.textContent = 'Syncing...';
+  status.textContent = 'Submitting your catches…';
 
   try {
     const result = await syncAllRecords(url, ({ current, total }) => {
@@ -236,86 +346,95 @@ async function handleSync() {
     updateUnsentBadge();
 
     if (result.failed > 0) {
-      status.textContent = `Ingest Failed — ${result.failed} catch(es) need retry`;
-      status.className = 'text-red-600 font-semibold';
+      status.textContent = 'Some catches could not be submitted. Check your connection and try again.';
+      status.className = 'text-red-600 font-semibold text-sm';
+    } else if (result.synced === 0) {
+      status.textContent = state.records.length
+        ? 'All catches have been submitted. Thank you for participating!'
+        : 'No catches to submit yet.';
+      status.className = 'text-slate-600 text-sm';
     } else {
-      status.textContent = `Successfully synced ${result.synced} catch(es)`;
-      status.className = 'text-green-600 font-semibold';
+      status.textContent =
+        'Thank you for participating! Our fisheries resources appreciate your contribution.';
+      status.className = 'text-green-600 font-semibold text-sm';
     }
   } catch (err) {
-    status.textContent = `Ingest Failed — ${err.message}`;
+    status.textContent = 'Submission failed. Please check your connection and try again.';
     status.className = 'text-red-600 font-semibold';
   }
 }
 
-async function handleExportZip() {
-  const pending = state.records.filter((r) => r.syncStatus !== 'synced');
-  const toExport = pending.length ? pending : state.records;
-  if (!toExport.length) {
-    alert('No catches to export');
-    return;
+function buildLogbookCard(r) {
+  // Build with DOM APIs + textContent so user-supplied fields (species,
+  // locationName, etc.) can never be interpreted as HTML/JS (stored XSS).
+  const card = document.createElement('div');
+  card.className = 'bg-white rounded-xl shadow p-3';
+
+  if (r.photoBase64) {
+    const img = document.createElement('img');
+    img.src = r.photoBase64;
+    img.alt = '';
+    img.className = 'w-full h-24 object-cover rounded-lg mb-2 bg-slate-100';
+    card.appendChild(img);
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className =
+      'w-full h-24 rounded-lg mb-2 bg-slate-100 flex items-center justify-center text-slate-400 text-xs';
+    placeholder.textContent = 'No photo';
+    card.appendChild(placeholder);
   }
 
-  const blob = await exportBackupZip(toExport, window.JSZip);
-  downloadBlob(blob, `scdnr-catches-${Date.now()}.zip`);
+  const species = document.createElement('p');
+  species.className = 'font-semibold text-sm';
+  species.textContent = r.species || '';
+  card.appendChild(species);
 
-  const clearAfter = confirm('Download complete. Clear exported catches from local queue?');
-  if (clearAfter) {
-    const remaining = state.records.filter((r) => !toExport.find((e) => e.id === r.id));
-    await import('./storage.js').then((m) => m.updateCatches(remaining));
-    state.records = remaining;
-    updateUnsentBadge();
+  if (r.locationName) {
+    const location = document.createElement('p');
+    location.className = 'text-xs text-slate-500 truncate';
+    location.textContent = r.locationName;
+    card.appendChild(location);
   }
-}
 
-function showClearModal(step) {
-  const modal = $('#clear-modal');
-  modal.classList.remove('hidden');
-  $('#clear-step-1').classList.toggle('hidden', step !== 1);
-  $('#clear-step-2').classList.toggle('hidden', step !== 2);
-}
+  const date = document.createElement('p');
+  date.className = 'text-xs text-slate-500';
+  date.textContent = formatCaptureDate(r.capturedAt);
+  card.appendChild(date);
 
-function hideClearModal() {
-  $('#clear-modal').classList.add('hidden');
-}
+  const synced = r.syncStatus === 'synced';
+  const badge = document.createElement('span');
+  badge.className =
+    'inline-block mt-1 text-xs px-2 py-0.5 rounded-full ' +
+    (synced ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800');
+  badge.textContent = synced ? 'Submitted' : 'Not yet submitted';
+  card.appendChild(badge);
 
-async function handleClearConfirm() {
-  await clearAllCatches();
-  state.records = [];
-  updateUnsentBadge();
-  hideClearModal();
-  renderLogbook();
+  return card;
 }
 
 function renderLogbook() {
   const grid = $('#logbook-grid');
   if (!grid) return;
 
+  grid.replaceChildren();
+
   if (!state.records.length) {
-    grid.innerHTML = '<p class="text-slate-500 text-center col-span-2 py-8">No catches logged yet</p>';
+    const empty = document.createElement('p');
+    empty.className = 'text-slate-500 text-center col-span-2 py-8';
+    empty.textContent = 'No catches logged yet';
+    grid.appendChild(empty);
     return;
   }
 
-  grid.innerHTML = state.records
+  state.records
     .slice()
     .reverse()
-    .map(
-      (r) => `
-    <div class="bg-white rounded-xl shadow p-3">
-      <img src="${r.photoBase64 || ''}" alt="" class="w-full h-24 object-cover rounded-lg mb-2 bg-slate-100" />
-      <p class="font-semibold text-sm">${r.species}</p>
-      <p class="text-xs text-slate-500">${new Date(r.capturedAt).toLocaleDateString()}</p>
-      <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${
-        r.syncStatus === 'synced' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-      }">${r.syncStatus}</span>
-    </div>`
-    )
-    .join('');
+    .forEach((r) => grid.appendChild(buildLogbookCard(r)));
 }
 
 async function init() {
   populateSpeciesDropdown();
-  $('#captured-at').value = new Date().toLocaleString();
+  setDefaultCaptureDate();
 
   state.records = await getAllCatches();
   updateUnsentBadge();
@@ -329,15 +448,11 @@ async function init() {
   $('#species').addEventListener('change', updateTagTypeAvailability);
   $('#catch-form').addEventListener('submit', handleSaveCatch);
   $('#photo-input').addEventListener('change', handlePhotoChange);
+  $('#photo-save-btn').addEventListener('click', handleSavePhotoToDevice);
+  $('#photo-remove-btn').addEventListener('click', clearPhoto);
   $('#gps-btn').addEventListener('click', handleGPS);
   $('#bathy-toggle').addEventListener('change', (e) => toggleBathymetry(e.target.checked));
   $('#sync-btn').addEventListener('click', handleSync);
-  $('#export-btn').addEventListener('click', handleExportZip);
-  $('#clear-btn').addEventListener('click', () => showClearModal(1));
-  $('#clear-step1-yes').addEventListener('click', () => showClearModal(2));
-  $('#clear-step1-no').addEventListener('click', hideClearModal);
-  $('#clear-step2-yes').addEventListener('click', handleClearConfirm);
-  $('#clear-step2-no').addEventListener('click', hideClearModal);
 
   $$('[data-tab-btn]').forEach((btn) => {
     btn.addEventListener('click', () => showTab(btn.dataset.tabBtn));

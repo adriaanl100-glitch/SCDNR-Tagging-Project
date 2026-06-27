@@ -22,8 +22,9 @@ describe('species rules', () => {
     expect(getAllowedTagTypes('Southern Flounder')).toEqual({ CR: true, K: false });
   });
 
-  it('disables CR for king mackerel', () => {
+  it('disables CR for pelagic species', () => {
     expect(getAllowedTagTypes('King Mackerel')).toEqual({ CR: false, K: true });
+    expect(getAllowedTagTypes('Dolphinfish (Mahi Mahi)')).toEqual({ CR: false, K: true });
   });
 
   it('defaults measurement by species', () => {
@@ -31,8 +32,14 @@ describe('species rules', () => {
     expect(getDefaultMeasurement('Sheepshead')).toBe('Fork');
   });
 
-  it('flags spotted seatrout', () => {
+  it('does not flag standard target species', () => {
+    expect(isDoNotTagSpecies('Red Drum')).toBe(false);
+    expect(isDoNotTagSpecies('Dolphinfish (Mahi Mahi)')).toBe(false);
+  });
+
+  it('flags Spotted Seatrout as DO NOT TAG but still allows both tag types', () => {
     expect(isDoNotTagSpecies('Spotted Seatrout')).toBe(true);
+    expect(getAllowedTagTypes('Spotted Seatrout')).toEqual({ CR: true, K: true });
   });
 });
 

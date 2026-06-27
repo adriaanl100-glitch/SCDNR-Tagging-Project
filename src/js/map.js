@@ -1,13 +1,49 @@
-import { getVisibleGridCells, gridCellCentroid, latLngToCell } from './grid.js';
+import { getVisibleGridCells, gridCellCentroid, gridCellBounds, latLngToCell } from './grid.js';
 
 const SC_CENTER = [32.7, -79.8];
 const DEFAULT_ZOOM = 9;
 
+const NOAA_EXPORT_URL =
+  'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer/export';
+
 let map = null;
 let gridLayer = null;
+let selectionLayer = null;
 let baseLayer = null;
 let bathyLayer = null;
 let onLocationSelect = null;
+let selectedCell = null;
+
+/** Esri MapServer export tiles (NOAA ENC — WMS endpoint returns 403). */
+const NoaaEncLayer = L.GridLayer.extend({
+  initialize(options) {
+    L.GridLayer.prototype.initialize.call(this, options);
+    this._exportUrl = options.exportUrl;
+    this._layerParam = options.layers || 'show:2';
+  },
+
+  createTile(coords, done) {
+    const tile = L.DomUtil.create('img', 'leaflet-tile');
+    tile.alt = '';
+    tile.setAttribute('role', 'presentation');
+
+    const tileBounds = this._tileCoordsToBounds(coords);
+    const crs = this._map.options.crs;
+    const sw = crs.project(tileBounds.getSouthWest());
+    const ne = crs.project(tileBounds.getNorthEast());
+    const bbox = `${sw.x},${sw.y},${ne.x},${ne.y}`;
+    const size = this.getTileSize();
+
+    tile.src =
+      `${this._exportUrl}?bbox=${bbox}&bboxSR=3857&imageSR=3857` +
+      `&size=${size.x},${size.y}&layers=${encodeURIComponent(this._layerParam)}` +
+      '&format=png&transparent=true&f=image';
+
+    tile.onload = () => done(null, tile);
+    tile.onerror = () => done(new Error('NOAA tile failed'), tile);
+    return tile;
+  }
+});
 
 export function initMap(containerId, callback) {
   onLocationSelect = callback;
@@ -19,14 +55,25 @@ export function initMap(containerId, callback) {
     maxZoom: 18
   }).addTo(map);
 
-  bathyLayer = L.tileLayer.wms('https://gis.charttools.noaa.gov/arcgis/services/MCS/NOAAChartDisplay/MapServer/WMSServer', {
-    layers: '0',
-    format: 'image/png',
-    transparent: true,
-    attribution: 'NOAA'
+  bathyLayer = new NoaaEncLayer({
+    exportUrl: NOAA_EXPORT_URL,
+    layers: 'show:1,2,3',
+    opacity: 0.92,
+    maxZoom: 16,
+    attribution: '© NOAA ENC'
   });
 
-  gridLayer = L.layerGroup().addTo(map);
+  if (!map.getPane('gridPane')) {
+    map.createPane('gridPane');
+    map.getPane('gridPane').style.zIndex = 450;
+  }
+  if (!map.getPane('selectionPane')) {
+    map.createPane('selectionPane');
+    map.getPane('selectionPane').style.zIndex = 460;
+  }
+
+  gridLayer = L.layerGroup({ pane: 'gridPane' }).addTo(map);
+  selectionLayer = L.layerGroup({ pane: 'selectionPane' }).addTo(map);
 
   map.on('moveend', redrawGrid);
   map.on('click', handleMapClick);
@@ -42,12 +89,15 @@ function redrawGrid() {
   const cells = getVisibleGridCells(bounds);
 
   cells.forEach((cell) => {
+    const isSelected = selectedCell?.row === cell.row && selectedCell?.col === cell.col;
     const { south, north, west, east } = cell.bounds;
     const rect = L.rectangle([[south, west], [north, east]], {
-      color: '#0d9488',
-      weight: 1,
-      fillOpacity: 0.05,
-      interactive: true
+      color: isSelected ? '#b45309' : '#0d9488',
+      weight: isSelected ? 3 : 1,
+      fillColor: isSelected ? '#f59e0b' : '#0d9488',
+      fillOpacity: isSelected ? 0.55 : 0.05,
+      interactive: true,
+      pane: 'gridPane'
     });
     rect.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
@@ -55,6 +105,26 @@ function redrawGrid() {
     });
     rect.addTo(gridLayer);
   });
+
+  drawSelectionMarker();
+  gridLayer.bringToFront();
+  selectionLayer.bringToFront();
+}
+
+function drawSelectionMarker() {
+  if (!selectionLayer) return;
+  selectionLayer.clearLayers();
+  if (!selectedCell) return;
+
+  const { south, north, west, east } = gridCellBounds(selectedCell.row, selectedCell.col);
+  L.rectangle([[south, west], [north, east]], {
+    color: '#92400e',
+    weight: 4,
+    fillColor: '#fbbf24',
+    fillOpacity: 0.65,
+    interactive: false,
+    pane: 'selectionPane'
+  }).addTo(selectionLayer);
 }
 
 function handleMapClick(e) {
@@ -63,19 +133,32 @@ function handleMapClick(e) {
 }
 
 function selectCell(row, col) {
+  selectedCell = { row, col };
   const centroid = gridCellCentroid(row, col);
   onLocationSelect?.({
     latitude: centroid.latitude,
     longitude: centroid.longitude,
     gridCellId: `${centroid.latitude.toFixed(3)}_${centroid.longitude.toFixed(3)}`
   });
+  redrawGrid();
+}
+
+export function highlightCellAt(lat, lon) {
+  const cell = latLngToCell(lat, lon);
+  selectedCell = { row: cell.row, col: cell.col };
+  redrawGrid();
 }
 
 export function toggleBathymetry(enabled) {
   if (!map || !bathyLayer) return;
   if (enabled) {
-    bathyLayer.addTo(map);
-  } else {
+    if (!map.hasLayer(bathyLayer)) {
+      bathyLayer.addTo(map);
+    }
+    bathyLayer.bringToFront();
+    gridLayer?.bringToFront();
+    selectionLayer?.bringToFront();
+  } else if (map.hasLayer(bathyLayer)) {
     map.removeLayer(bathyLayer);
   }
 }
@@ -90,6 +173,8 @@ export function captureGPS() {
       (pos) => {
         const { latitude, longitude } = pos.coords;
         const cell = latLngToCell(latitude, longitude);
+        selectedCell = { row: cell.row, col: cell.col };
+        redrawGrid();
         resolve({
           latitude,
           longitude,

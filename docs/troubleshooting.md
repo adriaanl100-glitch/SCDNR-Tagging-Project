@@ -10,7 +10,10 @@
 ## Sync failed / Ingest Failed
 
 - Check Wi-Fi or cellular connection
-- Verify `src/config.js` has the correct webhook URL
+- Verify `src/config.js` has the correct webhook URL (copy from `config.example.js`)
+- **Redeploy Apps Script** with access set to **Anyone** (not "Only myself")
+- In `Code.gs`, set real `SHEET_ID` and `FOLDER_ID`, then create a **New deployment**
+- The app sends JSON as `text/plain` to avoid CORS errors — do not change this on the server
 - Retry **Submit Sync to DNR**
 - Use **Download Backup ZIP** and email to program leader
 

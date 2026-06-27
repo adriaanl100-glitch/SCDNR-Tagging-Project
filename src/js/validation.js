@@ -65,7 +65,8 @@ export function validateCatchRecord(record) {
   }
 
   if (!record.condition) errors.condition = 'Select fish condition';
-  if (!record.photoBase64) errors.photoBase64 = 'Catch photo is required';
+
+  if (!record.capturedAt) errors.capturedAt = 'Capture date is required';
 
   return { valid: Object.keys(errors).length === 0, errors };
 }

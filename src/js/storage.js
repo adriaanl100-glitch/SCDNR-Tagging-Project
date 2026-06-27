@@ -36,6 +36,17 @@ export async function updateCatches(updatedList) {
   await lf.setItem('records', updatedList);
 }
 
+export async function markAllAsUnsent() {
+  const records = await getAllCatches();
+  const updated = records.map((r) => ({
+    ...r,
+    syncStatus: 'pending',
+    syncedAt: null
+  }));
+  await lf.setItem('records', updated);
+  return updated;
+}
+
 export async function clearAllCatches() {
   await lf.setItem('records', []);
 }

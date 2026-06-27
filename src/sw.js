@@ -1,8 +1,11 @@
-const CACHE_NAME = 'scdnr-tag-logging-v1';
+const CACHE_NAME = 'scdnr-tag-logging-v14';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './assets/scdnr-tagging-logo.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './js/app.js',
   './js/species.js',
   './js/validation.js',
@@ -37,6 +40,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = event.request.url;
+  if (url.includes('config.js')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetched = fetch(event.request).then((response) => {

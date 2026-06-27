@@ -46,4 +46,51 @@ export function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+export function dataUrlToBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bytes = atob(base64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+export function buildCatchPhotoFilename(record) {
+  const normalized = String(record.capturedAt || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = normalized
+    ? `${normalized[2]}-${normalized[3]}-${normalized[1]}`
+    : (() => {
+        const date = record.capturedAt ? new Date(record.capturedAt) : new Date();
+        return `${date.getMonth() + 1}-${date.getDate()}-${date.getFullYear()}`;
+      })();
+  const tag = `${record.tagType || 'tag'}${record.tagNumber || 'unknown'}`;
+  return `scdnr-${tag}-${d}.jpg`;
+}
+
+function prefersShareSave() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+export async function savePhotoToDevice(dataUrl, filename, { interactive = false } = {}) {
+  const safeName = filename.endsWith('.jpg') ? filename : `${filename}.jpg`;
+  const blob = dataUrlToBlob(dataUrl);
+  const file = new File([blob], safeName, { type: blob.type });
+
+  if (prefersShareSave()) {
+    if (!interactive || !navigator.canShare?.({ files: [file] })) {
+      return { saved: false, method: 'manual' };
+    }
+    try {
+      await navigator.share({ files: [file], title: 'SCDNR catch photo' });
+      return { saved: true, method: 'share' };
+    } catch (err) {
+      if (err.name === 'AbortError') return { saved: false, method: 'cancelled' };
+      throw err;
+    }
+  }
+
+  downloadBlob(blob, safeName);
+  return { saved: true, method: 'download' };
+}
+
 export { CSV_HEADERS };

@@ -14,7 +14,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="config.example.js"></script>
+  <script src="config.js?v=3"></script>
   <style>
     #map { min-height: 240px; z-index: 0; }
     .leaflet-container { font-family: inherit; }
@@ -27,10 +27,16 @@
   </div>
 
   <!-- Header -->
-  <header class="bg-teal-800 text-white px-4 py-4 sticky top-0 z-20 shadow">
-    <div class="flex items-center justify-between max-w-lg mx-auto">
-      <h1 class="text-lg font-bold">SCDNR Tag Logging</h1>
-      <span class="unsent-badge hidden bg-amber-400 text-amber-900 text-sm font-bold px-3 py-1 rounded-full">0</span>
+  <header class="bg-teal-800 text-white px-4 py-3 sticky top-0 z-20 shadow">
+    <div class="flex items-center justify-between max-w-lg mx-auto gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <img src="assets/scdnr-tagging-logo.png" alt="SCDNR Saltwater Tagging Program" class="h-12 w-12 rounded-full object-cover shrink-0 ring-2 ring-teal-600" />
+        <div class="min-w-0">
+          <h1 class="text-base font-bold leading-tight truncate">SCDNR Tag Logging</h1>
+          <p class="text-xs text-teal-200 truncate">Saltwater Tagging Program</p>
+        </div>
+      </div>
+      <span class="unsent-badge hidden bg-amber-400 text-amber-900 text-sm font-bold px-3 py-1 rounded-full shrink-0">0</span>
     </div>
   </header>
 
@@ -45,9 +51,9 @@
       <div id="map" class="rounded-xl border border-slate-200 overflow-hidden shadow-sm"></div>
       <label class="flex items-center gap-2 text-sm text-slate-600">
         <input type="checkbox" id="bathy-toggle" class="w-5 h-5 rounded" />
-        Show NOAA bathymetry layer
+        Show NOAA nautical chart (depths &amp; seabed)
       </label>
-      <p class="text-xs text-slate-500">Tap a grid cell to set location, or use GPS above.</p>
+      <p class="text-xs text-slate-500">Zoom in for chart detail. Tap a grid cell to select — selected tile highlights in amber.</p>
 
       <form id="catch-form" class="space-y-4" novalidate>
         <!-- Tag Type -->
@@ -77,8 +83,9 @@
             <input type="text" id="vial-number" class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base" />
           </div>
           <div>
-            <label for="captured-at" class="text-sm font-semibold text-slate-700">Date & Time</label>
-            <input type="text" id="captured-at" readonly class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-200 bg-slate-50 text-base" />
+            <label for="captured-at" class="text-sm font-semibold text-slate-700">Date</label>
+            <input type="date" id="captured-at" required class="w-full min-h-12 px-4 mt-1 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-teal-500" />
+            <p id="error-capturedAt" class="field-error hidden text-red-600 text-sm mt-1"></p>
           </div>
         </div>
 
@@ -167,12 +174,20 @@
         </fieldset>
 
         <div class="bg-white rounded-xl shadow p-4">
-          <label class="text-sm font-semibold text-slate-700 block mb-2">Catch Photo</label>
-          <label class="flex flex-col items-center justify-center min-h-24 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-teal-500">
+          <label class="text-sm font-semibold text-slate-700 block mb-2">Catch Photo <span class="font-normal text-slate-500">(optional)</span></label>
+          <p class="text-xs text-slate-500 mb-2">If you add a photo, the official SCDNR Saltwater Tagging Program logo is stamped on it.</p>
+          <label id="photo-upload-area" class="flex flex-col items-center justify-center min-h-28 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-teal-500 px-4 py-3">
             <input type="file" id="photo-input" accept="image/*" capture="environment" class="sr-only" />
-            <span class="text-slate-500 text-sm">Tap to capture or select photo</span>
+            <img src="assets/scdnr-tagging-logo.png" alt="" class="h-14 w-14 rounded-full object-cover mb-2 opacity-90" />
+            <span class="text-slate-600 text-sm font-medium text-center">Tap to capture or select photo</span>
+            <span class="text-slate-400 text-xs mt-1 text-center">Saved to this device automatically</span>
           </label>
-          <img id="photo-preview" class="hidden mt-3 w-full rounded-lg max-h-48 object-cover" alt="Preview" />
+          <img id="photo-preview" class="hidden mt-3 w-full rounded-lg max-h-48 object-cover" alt="Catch photo preview" />
+          <div id="photo-actions" class="hidden mt-2 flex flex-wrap gap-3">
+            <button type="button" id="photo-save-btn" class="text-sm text-teal-700 font-semibold underline">Save photo to device</button>
+            <button type="button" id="photo-remove-btn" class="text-sm text-slate-600 underline">Remove photo</button>
+          </div>
+          <p id="photo-save-status" class="hidden text-xs text-green-700 mt-1"></p>
           <p id="error-photoBase64" class="field-error hidden text-red-600 text-sm mt-1"></p>
         </div>
 
@@ -182,10 +197,10 @@
       </form>
     </div>
 
-    <!-- Sync Panel -->
+    <!-- Submit Panel -->
     <div id="panel-sync" data-tab-panel class="hidden space-y-6">
       <div class="bg-white rounded-xl shadow p-6 text-center">
-        <p class="text-slate-600 mb-2">Catches Awaiting Sync</p>
+        <p class="text-slate-600 mb-2">Catches Ready to Submit</p>
         <p id="sync-count" class="text-5xl font-bold text-teal-700">0</p>
       </div>
 
@@ -197,14 +212,9 @@
       <p id="sync-status" class="text-center text-sm"></p>
 
       <button type="button" id="sync-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold shadow">
-        Submit Sync to DNR
+        Submit Catches to DNR
       </button>
-      <button type="button" id="export-btn" class="w-full min-h-14 rounded-xl bg-slate-600 text-white text-lg font-semibold shadow">
-        Download Backup ZIP
-      </button>
-      <button type="button" id="clear-btn" class="w-full min-h-12 rounded-xl bg-red-600 text-white text-sm font-semibold opacity-80">
-        Clear Local Logs
-      </button>
+      <p class="text-xs text-slate-500 text-center">Submit when you have cell service or Wi‑Fi. Catches are saved on this device until then.</p>
     </div>
 
     <!-- Logbook Panel -->
@@ -217,7 +227,7 @@
   <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-20">
     <div class="max-w-lg mx-auto flex">
       <button data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
-      <button data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Sync</button>
+      <button data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>
       <button data-tab-btn="logbook" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Logbook</button>
     </div>
   </nav>
@@ -225,28 +235,6 @@
   <!-- Save toast -->
   <div id="save-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-30 font-semibold">
     Catch saved!
-  </div>
-
-  <!-- Clear modal -->
-  <div id="clear-modal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
-      <div id="clear-step-1">
-        <h2 class="text-lg font-bold mb-2">Clear all local logs?</h2>
-        <p class="text-slate-600 text-sm mb-4">This removes unsynced catches from this device.</p>
-        <div class="flex gap-3">
-          <button id="clear-step1-no" class="flex-1 min-h-12 rounded-lg border">Cancel</button>
-          <button id="clear-step1-yes" class="flex-1 min-h-12 rounded-lg bg-amber-500 text-white font-semibold">Continue</button>
-        </div>
-      </div>
-      <div id="clear-step-2" class="hidden">
-        <h2 class="text-lg font-bold mb-2 text-red-600">Are you absolutely sure?</h2>
-        <p class="text-slate-600 text-sm mb-4">This cannot be undone.</p>
-        <div class="flex gap-3">
-          <button id="clear-step2-no" class="flex-1 min-h-12 rounded-lg border">Cancel</button>
-          <button id="clear-step2-yes" class="flex-1 min-h-12 rounded-lg bg-red-600 text-white font-semibold">Delete All</button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <script type="module" src="js/app.js"></script>

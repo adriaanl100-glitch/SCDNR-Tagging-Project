@@ -26,6 +26,7 @@ describe('validateCatchRecord', () => {
   const valid = {
     tagType: 'CR',
     tagNumber: '12345',
+    capturedAt: '2026-06-27',
     species: 'Red Drum',
     lengthInches: 24,
     measurementType: 'Tail',
@@ -39,6 +40,12 @@ describe('validateCatchRecord', () => {
 
   it('passes valid record', () => {
     const { valid: ok, errors } = validateCatchRecord(valid);
+    expect(ok).toBe(true);
+    expect(errors).toEqual({});
+  });
+
+  it('passes without photo', () => {
+    const { valid: ok, errors } = validateCatchRecord({ ...valid, photoBase64: null });
     expect(ok).toBe(true);
     expect(errors).toEqual({});
   });
@@ -63,5 +70,11 @@ describe('validateCatchRecord', () => {
     });
     expect(ok).toBe(false);
     expect(errors.tagType).toMatch(/not allowed/);
+  });
+
+  it('still allows saving a DO NOT TAG species so the mistake is recorded', () => {
+    const { valid: ok, errors } = validateCatchRecord({ ...valid, species: 'Spotted Seatrout' });
+    expect(ok).toBe(true);
+    expect(errors).toEqual({});
   });
 });

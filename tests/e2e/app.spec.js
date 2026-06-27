@@ -15,9 +15,9 @@ test('shows validation errors on empty submit', async ({ page }) => {
 
 test('navigates to sync tab', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sync' }).click();
-  await expect(page.getByRole('button', { name: 'Submit Sync to DNR' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download Backup ZIP' })).toBeVisible();
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Submit Catches to DNR' })).toBeVisible();
+  await expect(page.locator('#sync-count')).toBeVisible();
 });
 
 test('species dropdown disables invalid tag types', async ({ page }) => {

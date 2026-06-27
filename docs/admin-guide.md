@@ -32,11 +32,23 @@ window.SCDNR_CONFIG = {
 
 ## Testing the Webhook
 
+Use **text/plain** (not application/json) — required for Google Apps Script:
+
 ```bash
-curl -X POST -H "Content-Type: application/json" \
+# Ping test
+curl -sL -X POST -H "Content-Type: text/plain;charset=utf-8" \
+  -d '{"ping":true}' \
+  YOUR_WEBHOOK_URL
+
+# Full catch test
+curl -sL -X POST -H "Content-Type: text/plain;charset=utf-8" \
   -d '{"id":"test-1","tagType":"CR","tagNumber":"12345","species":"Red Drum","lengthInches":24,"measurementType":"Tail","measurementAccuracy":"Measured","locationName":"Test","latitude":32.7,"longitude":-79.8,"condition":"Good","photoBase64":""}' \
   YOUR_WEBHOOK_URL
 ```
+
+Expected response: `{"success":true,...}` — not an HTML login page.
+
+See [google-setup-walkthrough.md](./google-setup-walkthrough.md) for the full step-by-step.
 
 ## Redeployment
 

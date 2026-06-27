@@ -26,19 +26,23 @@
 
 | Species | Tag CR | Tag K | Min length | Measurement default | Notes |
 |---------|--------|-------|------------|---------------------|-------|
-| Red Drum | ✓ | ✓ | CR 10" / K 18" | Tail | |
-| Black Drum | ✓ | ✓ | CR 10" / K 18" | Tail | |
-| Spotted Seatrout | ✓ | ✓ | CR 10" / K 18" | Tail | **DO NOT TAG** warning |
-| Southern Flounder | ✓ | ✗ | CR 10" | Tail | K disabled |
-| Summer Flounder | ✓ | ✗ | CR 10" | Tail | K disabled |
-| Sheepshead | ✓ | ✓ | CR 10" / K 18" | Fork | |
-| Black Sea Bass | ✓ | ✓ | CR 10" / K 18" | Fork | |
-| Cobia | ✓ | ✓ | CR 10" / K 18" | Fork | |
-| Bluefish | ✓ | ✓ | CR 10" / K 18" | Fork | |
-| Tarpon | ✓ | ✓ | CR 10" / K 18" | Fork | |
-| King Mackerel | ✗ | ✓ | K 18" | Fork | CR disabled |
-| Spanish Mackerel | ✗ | ✓ | K 18" | Fork | CR disabled |
 | Billfish | ✗ | ✓ | K 18" | Fork | CR disabled |
+| Black Drum | ✓ | ✓ | CR 10" / K 18" | Tail | |
+| Black Sea Bass | ✓ | ✓ | CR 10" / K 18" | Fork | |
+| Bluefish | ✓ | ✓ | CR 10" / K 18" | Fork | |
+| Cobia | ✓ | ✓ | CR 10" / K 18" | Fork | |
+| Dolphinfish (Mahi Mahi) | ✗ | ✓ | K 18" | Fork | CR disabled |
+| Grouper (All Species) | ✓ | ✓ | CR 10" / K 18" | Fork | Generic entry for all grouper |
+| King Mackerel | ✗ | ✓ | K 18" | Fork | CR disabled |
+| Red Drum | ✓ | ✓ | CR 10" / K 18" | Tail | |
+| Sheepshead | ✓ | ✓ | CR 10" / K 18" | Fork | |
+| Snapper (All Species) | ✓ | ✓ | CR 10" / K 18" | Fork | Generic entry for all snapper |
+| Southern Flounder | ✓ | ✗ | CR 10" | Tail | K disabled |
+| Spanish Mackerel | ✗ | ✓ | K 18" | Fork | CR disabled |
+| Spotted Seatrout | ✓ | ✓ | CR 10" / K 18" | Tail | **DO NOT TAG** warning — save/submit still allowed to record the catch |
+| Striped Bass | ✓ | ✓ | CR 10" / K 18" | Tail | |
+| Summer Flounder | ✓ | ✗ | CR 10" | Tail | K disabled |
+| Tarpon | ✓ | ✓ | CR 10" / K 18" | Fork | |
 | Tuna | ✗ | ✓ | K 18" | Fork | CR disabled |
 
 ## Sync Payload (POST to webhook)

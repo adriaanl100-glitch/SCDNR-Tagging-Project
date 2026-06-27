@@ -1,21 +1,36 @@
 /**
  * Species definitions and tag/measurement rules.
+ * Aligned with SCDNR Marine Game Fish Tagging Program target species.
  */
+const TAIL = { allowCR: true, allowK: true, defaultMeasurement: 'Tail', doNotTag: false };
+const FORK = { allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false };
+const FLOUNDER = { allowCR: true, allowK: false, defaultMeasurement: 'Tail', doNotTag: false };
+const PELAGIC = { allowCR: false, allowK: true, defaultMeasurement: 'Fork', doNotTag: false };
+// Tagging is permitted (we still record the catch) but the species is flagged
+// DO NOT TAG so the angler is educated at the point of entry.
+const DO_NOT_TAG = { allowCR: true, allowK: true, defaultMeasurement: 'Tail', doNotTag: true };
+
+const withRules = (name, rules) => ({ name, ...rules });
+
 export const SPECIES_LIST = [
-  { name: 'Red Drum', allowCR: true, allowK: true, defaultMeasurement: 'Tail', doNotTag: false },
-  { name: 'Black Drum', allowCR: true, allowK: true, defaultMeasurement: 'Tail', doNotTag: false },
-  { name: 'Spotted Seatrout', allowCR: true, allowK: true, defaultMeasurement: 'Tail', doNotTag: true },
-  { name: 'Southern Flounder', allowCR: true, allowK: false, defaultMeasurement: 'Tail', doNotTag: false },
-  { name: 'Summer Flounder', allowCR: true, allowK: false, defaultMeasurement: 'Tail', doNotTag: false },
-  { name: 'Sheepshead', allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Black Sea Bass', allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Cobia', allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Bluefish', allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Tarpon', allowCR: true, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'King Mackerel', allowCR: false, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Spanish Mackerel', allowCR: false, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Billfish', allowCR: false, allowK: true, defaultMeasurement: 'Fork', doNotTag: false },
-  { name: 'Tuna', allowCR: false, allowK: true, defaultMeasurement: 'Fork', doNotTag: false }
+  withRules('Billfish', PELAGIC),
+  withRules('Black Drum', TAIL),
+  withRules('Black Sea Bass', FORK),
+  withRules('Bluefish', FORK),
+  withRules('Cobia', FORK),
+  withRules('Dolphinfish (Mahi Mahi)', PELAGIC),
+  withRules('Grouper (All Species)', FORK),
+  withRules('King Mackerel', PELAGIC),
+  withRules('Red Drum', TAIL),
+  withRules('Sheepshead', FORK),
+  withRules('Snapper (All Species)', FORK),
+  withRules('Southern Flounder', FLOUNDER),
+  withRules('Spanish Mackerel', PELAGIC),
+  withRules('Spotted Seatrout', DO_NOT_TAG),
+  withRules('Striped Bass', TAIL),
+  withRules('Summer Flounder', FLOUNDER),
+  withRules('Tarpon', FORK),
+  withRules('Tuna', PELAGIC)
 ];
 
 export function getSpecies(name) {
