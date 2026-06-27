@@ -24,10 +24,18 @@
       isolation: isolate;
       overflow: hidden;
     }
-    .leaflet-container { font-family: inherit; }
+    .leaflet-container { font-family: inherit; touch-action: pan-x pan-y; }
+    #app-nav {
+      touch-action: manipulation;
+      pointer-events: auto;
+    }
+    #app-nav button {
+      min-height: 48px;
+      touch-action: manipulation;
+    }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen pb-20">
+<body class="bg-slate-50 min-h-[100dvh] flex flex-col">
   <!-- Offline banner -->
   <div id="offline-banner" class="hidden bg-amber-500 text-white text-center py-2 text-sm font-semibold">
     Offline — catches saved locally
@@ -47,7 +55,7 @@
     </div>
   </header>
 
-  <main class="max-w-lg mx-auto px-4 py-4">
+  <main class="flex-1 overflow-y-auto w-full max-w-lg mx-auto px-4 py-4 min-h-0">
     <!-- Catch Form Panel -->
     <div id="panel-catch" data-tab-panel class="space-y-4">
       <button type="button" id="gps-btn" class="w-full min-h-14 rounded-xl bg-teal-700 text-white text-lg font-semibold active:bg-teal-800 shadow">
@@ -230,17 +238,17 @@
     </div>
   </main>
 
-  <!-- Tab bar -->
-  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
+  <!-- Tab bar (in document flow — avoids iOS fixed-footer tap bugs) -->
+  <nav id="app-nav" class="shrink-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
     <div class="max-w-lg mx-auto flex">
-      <button data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
-      <button data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>
-      <button data-tab-btn="logbook" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Logbook</button>
+      <button type="button" data-tab-btn="catch" class="flex-1 py-3 text-sm font-semibold border-b-2 border-teal-600 text-teal-700">Log Catch</button>
+      <button type="button" data-tab-btn="sync" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Submit</button>
+      <button type="button" data-tab-btn="logbook" class="flex-1 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500">Logbook</button>
     </div>
   </nav>
 
   <!-- Save toast -->
-  <div id="save-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-30 font-semibold">
+  <div id="save-toast" class="hidden fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-full shadow-lg z-[60] font-semibold">
     Catch saved!
   </div>
 

@@ -433,6 +433,9 @@ function renderLogbook() {
 }
 
 async function init() {
+  // Remove legacy modal overlay from older cached builds (blocked bottom tabs).
+  document.getElementById('clear-modal')?.remove();
+
   populateSpeciesDropdown();
   setDefaultCaptureDate();
 
@@ -459,7 +462,10 @@ async function init() {
   });
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
+    caches?.keys?.().then((keys) =>
+      keys.filter((k) => k !== 'scdnr-tag-logging-v17').forEach((k) => caches.delete(k))
+    );
   }
 }
 

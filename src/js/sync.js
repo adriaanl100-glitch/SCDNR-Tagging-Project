@@ -135,7 +135,7 @@ function ensureSyncFrame() {
     frame.id = 'scdnr-sync-frame';
     frame.name = 'scdnr-sync-frame';
     frame.title = 'SCDNR sync';
-    frame.style.display = 'none';
+    frame.style.cssText = 'display:none;width:0;height:0;border:0;visibility:hidden;pointer-events:none;position:absolute;left:-9999px';
     document.body.appendChild(frame);
   }
   return frame;
